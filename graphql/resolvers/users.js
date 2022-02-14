@@ -3,16 +3,33 @@ const { UserInputError, AuthenticationError } = require("apollo-server");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
 
-const { User } = require("../../models");
+const { User, Message } = require("../../models");
 
 module.exports = {
   Query: {
     getUsers: async (_, __, { user }) => {
+      console.log(user, "user");
       try {
         if (!user) throw new AuthenticationError("Unauthenticated");
 
-        const users = await User.findAll({
+        let users = await User.findAll({
+          attributes: ["username", "imageUrl", "createdAt"],
           where: { username: { [Op.ne]: user.username } },
+        });
+
+        const allUserMessages = await Message.findAll({
+          where: {
+            [Op.or]: [{ from: user.username }, { to: user.username }],
+          },
+          order: [["createdAt", "DESC"]],
+        });
+
+        users = users.map((otherUser) => {
+          const latestMessage = allUserMessages.find(
+            (m) => m.from === otherUser.username || m.to === otherUser.username
+          );
+          otherUser.latestMessage = latestMessage;
+          return otherUser;
         });
 
         return users;
@@ -51,7 +68,7 @@ module.exports = {
         }
 
         const token = jwt.sign({ username }, "secret", {
-          expiresIn: 60 * 60,
+          expiresIn: 60 * 60 * 60,
         });
 
         return {
@@ -67,7 +84,7 @@ module.exports = {
   },
   Mutation: {
     register: async (_, args) => {
-      let { username, email, password, confirmPassword } = args;
+      let { username, email, password, confirmPassword, imageUrl } = args;
       let errors = {};
 
       try {
@@ -102,6 +119,7 @@ module.exports = {
           username,
           email,
           password,
+          imageUrl,
         });
 
         // Return user

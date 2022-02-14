@@ -2,6 +2,11 @@ const { UserInputError, AuthenticationError } = require("apollo-server");
 const { Op } = require("sequelize");
 
 const { Message, User } = require("../../models");
+const { PubSub, withFilter } = require("graphql-subscriptions");
+
+const pubsub = new PubSub();
+
+let userDetail;
 
 module.exports = {
   Query: {
@@ -35,7 +40,7 @@ module.exports = {
     sendMessage: async (parent, { to, content }, { user }) => {
       try {
         if (!user) throw new AuthenticationError("Unauthenticated");
-
+        userDetail = user;
         const recipient = await User.findOne({ where: { username: to } });
 
         if (!recipient) {
@@ -54,11 +59,32 @@ module.exports = {
           content,
         });
 
+        pubsub.publish("NEW_MESSAGE", { newMessage: message });
         return message;
       } catch (err) {
         console.log(err);
         throw err;
       }
+    },
+  },
+  Subscription: {
+    newMessage: {
+      subscribe: withFilter(
+        (_, __, { user }) => {
+          // if (!user) throw new AuthenticationError("Unauthenticated");
+          return pubsub.asyncIterator(["NEW_MESSAGE"]);
+        },
+        ({ newMessage }, _) => {
+          if (
+            newMessage.from === userDetail?.username ||
+            newMessage.to === userDetail?.username
+          ) {
+            return true;
+          }
+
+          return false;
+        }
+      ),
     },
   },
 };

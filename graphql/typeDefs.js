@@ -5,6 +5,8 @@ module.exports = gql`
     email: String!
     createdAt: String!
     token: String
+    imageUrl: String
+    latestMessage: Message
   }
   type Message {
     uuid: String!
@@ -27,5 +29,8 @@ module.exports = gql`
       confirmPassword: String!
     ): User!
     sendMessage(to: String!, content: String!): Message
+  }
+  type Subscription {
+    newMessage: Message!
   }
 `;
